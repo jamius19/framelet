@@ -1,0 +1,404 @@
+/*
+ * Author: Jamius Siam
+ * Since: 31/10/2026
+ */
+
+import { Theme } from "theme.slint";
+import { State } from "state.slint";
+import {
+    FButton, FComboBox, FTextField, FToggle, HotkeyBox, InfoBar, Page, SectionLabel, SettingCard, SliderCard,
+    StackedCard
+} from "components.slint";
+
+component Gap inherits Rectangle {
+    height: 12px;
+}
+
+export component GeneralPage inherits Page {
+    title: "General";
+
+    SectionLabel { text: "Save location"; }
+    StackedCard {
+        title: "Output folder";
+        description: "Recordings are saved here automatically.";
+        error: State.output-dir-error ? "Enter a full folder path that starts with a drive letter." : "";
+        glyph: "\u{E838}";
+        FTextField {
+            horizontal-stretch: 1;
+            invalid: State.output-dir-error;
+            text <=> State.output-dir;
+            edited(_) => { State.changed(); }
+            committed => { State.commit-text(); }
+        }
+        FButton {
+            text: "Browse";
+            clicked => { State.browse-output(); }
+        }
+    }
+    SettingCard {
+        title: "Ask where to save after each recording";
+        description: "Show a Save As dialog instead of saving automatically.";
+        glyph: "\u{E74E}";
+        FToggle {
+            checked <=> State.ask-save;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    StackedCard {
+        title: "File name pattern";
+        description: "Preview: " + State.pattern-preview + "   (tokens: {YYYY} {MM} {DD} {hh} {mm} {ss})";
+        error: State.pattern-error ? "The file name pattern can't be empty." : "";
+        glyph: "\u{E8AC}";
+        FTextField {
+            horizontal-stretch: 1;
+            invalid: State.pattern-error;
+            text <=> State.file-pattern;
+            edited(_) => { State.changed(); }
+            committed => { State.commit-text(); }
+        }
+    }
+
+    Gap {}
+    SectionLabel { text: "Application"; }
+    SettingCard {
+        title: "Launch at startup";
+        description: "Start Framelet in the tray when you sign in to Windows.";
+        glyph: "\u{E7E8}";
+        FToggle {
+            checked <=> State.startup;
+            toggled(on) => { State.startup-toggled(on); }
+        }
+    }
+    SettingCard {
+        title: "Minimize to tray";
+        description: "Minimizing this window closes it. Framelet keeps running in the tray.";
+        glyph: "\u{E73F}";
+        FToggle {
+            checked <=> State.tray;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Record hotkey";
+        description: "Global shortcut that starts a recording. Click the box, then press a new combination.";
+        error: State.hotkey-error;
+        glyph: "\u{E765}";
+        HotkeyBox {
+            keys: State.hotkey-keys;
+            capturing: State.capturing;
+            invalid: State.hotkey-error != "";
+            start-capture => { State.start-capture(); }
+            cancel-capture => { State.cancel-capture(); }
+        }
+    }
+    SettingCard {
+        title: "Theme";
+        description: "Choose how Framelet settings look.";
+        glyph: "\u{E790}";
+        FComboBox {
+            model: ["Use system setting", "Dark", "Light"];
+            current-index <=> State.theme-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Open folder after saving";
+        description: "Reveal the finished recording in File Explorer.";
+        glyph: "\u{E8DA}";
+        FToggle {
+            checked <=> State.open-folder;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Notifications";
+        description: "Show a notification when a recording is saved or something goes wrong.";
+        glyph: "\u{EA8F}";
+        FToggle {
+            checked <=> State.notifications;
+            toggled(_) => { State.changed(); }
+        }
+    }
+}
+
+export component RecordingPage inherits Page {
+    title: "Recording";
+
+    InfoBar {
+        text: "Regions are captured at their exact pixel size — never scaled. Multiple monitors and mixed display "
+            + "scaling (DPI) are supported, including regions that span monitors.";
+    }
+    Gap {}
+    SectionLabel { text: "Capture"; }
+    SettingCard {
+        title: "Format";
+        description: "What a finished recording is saved as.";
+        glyph: "\u{E8B2}";
+        FComboBox {
+            model: ["MP4 video", "Animated GIF"];
+            current-index <=> State.format-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Show cursor";
+        description: "Include the mouse pointer in the recording.";
+        glyph: "\u{E962}";
+        FToggle {
+            checked <=> State.show-cursor;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Countdown";
+        description: "Wait before recording starts so you can get ready.";
+        glyph: "\u{E916}";
+        FComboBox {
+            model: ["Off", "3 seconds", "5 seconds"];
+            current-index <=> State.countdown-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+
+    Gap {}
+    SectionLabel { text: "While recording"; }
+    SettingCard {
+        title: "Show elapsed time";
+        description: "Display a running timer on the floating controls.";
+        glyph: "\u{E823}";
+        FToggle {
+            checked <=> State.show-elapsed;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Show floating controls";
+        description: "Show a small control bar with stop and cancel buttons next to the region.";
+        glyph: "\u{E8A9}";
+        FToggle {
+            checked <=> State.show-controls;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Stop with hotkey";
+        description: "Pressing the record hotkey again stops the recording.";
+        glyph: "\u{E71A}";
+        FToggle {
+            checked <=> State.stop-hotkey;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Dim screen while recording";
+        description: "Darkens everything outside the recording area. The red recording border is always shown.";
+        glyph: "\u{E706}";
+        FToggle {
+            checked <=> State.dim-while-recording;
+            toggled(_) => { State.changed(); }
+        }
+    }
+}
+
+export component VideoPage inherits Page {
+    title: "Video";
+
+    SectionLabel { text: "Encoder"; }
+    SettingCard {
+        title: "Detected hardware";
+        description: State.caps-detecting ? "Detecting…" : State.caps-summary;
+        glyph: "\u{E950}";
+        FButton {
+            text: "Detect again";
+            glyph: "\u{E72C}";
+            enabled: !State.caps-detecting;
+            clicked => { State.detect-again(); }
+        }
+    }
+    if State.encoder-index == 1 && State.caps-known && !State.caps-nvenc: InfoBar {
+        warning: true;
+        glyph: "\u{E7BA}";
+        text: "NVIDIA NVENC isn't available on this system. Recordings will use software encoding (x264) instead, "
+            + "which uses more CPU.";
+    }
+    SettingCard {
+        title: "Encoder";
+        description: "Auto uses NVIDIA NVENC when available and falls back to software.";
+        glyph: "\u{E9D9}";
+        FComboBox {
+            model: ["Auto (prefer NVIDIA NVENC)", "NVIDIA NVENC", "Software (x264)"];
+            box-width: 250px;
+            current-index <=> State.encoder-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Codec";
+        description: "H.264 plays everywhere.";
+        glyph: "\u{E8B2}";
+        FComboBox {
+            model: ["H.264"];
+            enabled: false;
+            current-index: 0;
+        }
+    }
+
+    Gap {}
+    SectionLabel { text: "Quality"; }
+    SettingCard {
+        title: "Frame rate";
+        description: "Higher is smoother but makes larger files.";
+        glyph: "\u{E916}";
+        FComboBox {
+            model: ["15 fps", "24 fps", "30 fps", "60 fps"];
+            current-index <=> State.fps-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+    SliderCard {
+        title: "Quality";
+        description: "Trade file size against picture quality.";
+        low-label: "Smaller file";
+        high-label: "Higher quality";
+        value <=> State.quality;
+        edited(_) => { State.changed(); }
+    }
+    SettingCard {
+        title: "Encoder preset";
+        description: "Fast uses the least CPU/GPU time. High Quality compresses better but is slower.";
+        glyph: "\u{EC4A}";
+        FComboBox {
+            model: ["Fast", "Balanced", "High Quality"];
+            current-index <=> State.preset-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+
+    Gap {}
+    SectionLabel { text: "FFmpeg"; }
+    StackedCard {
+        title: "FFmpeg location";
+        description: "Optional. Leave empty to use the FFmpeg next to Framelet or on your PATH.";
+        error: State.ffmpeg-error ? "FFmpeg wasn't found at this path." : "";
+        glyph: "\u{E8B7}";
+        FTextField {
+            horizontal-stretch: 1;
+            placeholder: "Automatic";
+            invalid: State.ffmpeg-error;
+            text <=> State.ffmpeg-path;
+            edited(_) => { State.changed(); }
+            committed => { State.commit-text(); }
+        }
+        FButton {
+            text: "Browse";
+            clicked => { State.browse-ffmpeg(); }
+        }
+    }
+}
+
+export component GifPage inherits Page {
+    title: "GIF";
+
+    InfoBar {
+        text: "A higher frame rate, larger size or better quality all produce a larger GIF file.";
+    }
+    Gap {}
+    SectionLabel { text: "Animation"; }
+    SettingCard {
+        title: "Frame rate";
+        description: "GIFs rarely need more than 15–20 fps.";
+        glyph: "\u{E916}";
+        FComboBox {
+            model: ["10 fps", "15 fps", "20 fps", "24 fps", "30 fps"];
+            current-index <=> State.gif-fps-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Loop forever";
+        description: "Restart the animation automatically when it ends.";
+        glyph: "\u{E8EE}";
+        FToggle {
+            checked <=> State.gif-loop;
+            toggled(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Maximum duration";
+        description: "Recording stops automatically after this many seconds. 0 means no limit (up to 3600).";
+        error: State.gif-max-error ? "Enter a whole number from 0 to 3600." : "";
+        glyph: "\u{E823}";
+        HorizontalLayout {
+            spacing: 8px;
+            FTextField {
+                width: 90px;
+                invalid: State.gif-max-error;
+                text <=> State.gif-max;
+                edited(_) => { State.changed(); }
+                committed => { State.commit-text(); }
+            }
+            Text {
+                text: "seconds";
+                font-size: 14px;
+                color: Theme.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    Gap {}
+    SectionLabel { text: "Size and quality"; }
+    SettingCard {
+        title: "Scaling";
+        description: "Shrink the GIF to reduce file size. Original keeps the exact pixel size.";
+        glyph: "\u{E740}";
+        FComboBox {
+            model: ["Original size", "75%", "50%", "Custom width"];
+            current-index <=> State.gif-scale-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+    if State.gif-scale-index == 3: SettingCard {
+        title: "Custom width";
+        description: "Height follows the aspect ratio. Between 16 and 7680 pixels.";
+        error: State.gif-width-error ? "Enter a whole number from 16 to 7680." : "";
+        glyph: "\u{E8A0}";
+        HorizontalLayout {
+            spacing: 8px;
+            FTextField {
+                width: 90px;
+                invalid: State.gif-width-error;
+                text <=> State.gif-width;
+                edited(_) => { State.changed(); }
+                committed => { State.commit-text(); }
+            }
+            Text {
+                text: "pixels";
+                font-size: 14px;
+                color: Theme.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+    }
+    SettingCard {
+        title: "Quality";
+        description: "Better quality uses more colors and produces larger files.";
+        glyph: "\u{E91B}";
+        FComboBox {
+            model: ["Smaller file", "Balanced", "Best quality"];
+            current-index <=> State.gif-quality-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+    SettingCard {
+        title: "Dithering";
+        description: "Smooths color banding. Auto picks a good method for the quality level.";
+        glyph: "\u{E7C5}";
+        FComboBox {
+            model: ["Auto", "Bayer", "Floyd–Steinberg", "None"];
+            
+            current-index <=> State.gif-dither-index;
+            selected(_) => { State.changed(); }
+        }
+    }
+}

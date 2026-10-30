@@ -1,0 +1,51 @@
+/*
+ * Author: Jamius Siam
+ * Since: 31/10/2026
+ */
+
+// Design tokens modelled on the Windows 11 Fluent palette. `dark` is switched at runtime.
+export global Theme {
+    in-out property <bool> dark: true;
+    // Window uses a Mica backdrop: window and sidebar backgrounds are transparent.
+    in-out property <bool> mica: false;
+    // Window height, used by drop-downs to decide whether to open upwards.
+    in-out property <length> window-height: 620px;
+
+    out property <color> window-bg: mica ? transparent : dark ? #202020 : #f3f3f3;
+    out property <color> sidebar-bg: mica ? transparent : dark ? #202020 : #f3f3f3;
+    out property <color> card-bg: dark ? #2b2b2b : #fbfbfb;
+    out property <color> card-hover: dark ? #313131 : #f6f6f6;
+    out property <color> card-border: dark ? #1d1d1d : #e5e5e5;
+    out property <color> flyout-bg: dark ? #2c2c2c : #f9f9f9;
+    out property <color> flyout-border: dark ? #484848 : #d8d8d8;
+
+    out property <color> text: dark ? #ffffff : #1a1a1a;
+    out property <color> text-secondary: dark ? #c5c5c5 : #5c5c5c;
+    out property <color> text-tertiary: dark ? #9d9d9d : #7a7a7a;
+    out property <color> text-disabled: dark ? #5d5d5d : #a8a8a8;
+
+    out property <color> control: dark ? #363636 : #ffffff;
+    out property <color> control-hover: dark ? #3d3d3d : #f6f6f6;
+    out property <color> control-pressed: dark ? #323232 : #f0f0f0;
+    out property <color> control-border: dark ? #454545 : #e0e0e0;
+    out property <color> control-border-strong: dark ? #9a9a9a : #8a8a8a;
+    out property <color> control-disabled: dark ? #2f2f2f : #f3f3f3;
+
+    out property <color> accent: dark ? #4cc2ff : #005fb8;
+    out property <color> accent-hover: dark ? #47b1e8 : #1a6fc0;
+    out property <color> accent-pressed: dark ? #42a1d0 : #3a84cb;
+    out property <color> on-accent: dark ? #000000 : #ffffff;
+
+    out property <color> nav-hover: dark ? #2a2a2a : #e6e6e6;
+    out property <color> nav-selected: dark ? #333333 : #e0e0e0;
+    out property <color> chip: dark ? #404040 : #ececec;
+    out property <color> divider: dark ? #3a3a3a : #e2e2e2;
+
+    out property <color> info-bg: dark ? #2b2b2b : #fbfbfb;
+    out property <color> warning-bg: dark ? #433519 : #fff4ce;
+    out property <color> warning-text: dark ? #fce100 : #9d5d00;
+    out property <color> error: dark ? #ff99a4 : #c42b1c;
+
+    out property <string> font: "Segoe UI Variable Text";
+    out property <string> icons: "Segoe Fluent Icons";
+}

@@ -1,0 +1,159 @@
+/*
+ * Author: Jamius Siam
+ * Since: 31/10/2026
+ */
+
+import { Theme } from "theme.slint";
+import { State } from "state.slint";
+import { Icon } from "components.slint";
+import { GeneralPage, RecordingPage, VideoPage, GifPage } from "pages.slint";
+
+export { State, Theme }
+
+component NavItem inherits Rectangle {
+    in property <string> glyph;
+    in property <string> label;
+    in property <bool> selected;
+    callback clicked();
+
+    height: 40px;
+    border-radius: 4px;
+    background: root.selected ? Theme.nav-selected
+        : ta.pressed || ta.has-hover ? Theme.nav-hover : transparent;
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    if root.selected: Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: 3px;
+        height: 16px;
+        border-radius: 1.5px;
+        background: Theme.accent;
+    }
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 12px;
+        spacing: 14px;
+        Icon {
+            width: 20px;
+            text: root.glyph;
+            font-size: 16px;
+        }
+        Text {
+            text: root.label;
+            font-size: 14px;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component SettingsWindow inherits Window {
+    in property <string> window-title: "Framelet Settings";
+
+    title: root.window-title;
+    preferred-width: 880px;
+    preferred-height: 620px;
+    min-width: 720px;
+    min-height: 520px;
+    background: Theme.window-bg;
+    default-font-family: Theme.font;
+    default-font-size: 14px;
+
+    init => { Theme.window-height = root.height; }
+    changed height => { Theme.window-height = root.height; }
+
+    HorizontalLayout {
+        Rectangle {
+            width: 232px;
+            background: Theme.sidebar-bg;
+
+            VerticalLayout {
+                padding: 12px;
+                padding-top: 16px;
+                spacing: 2px;
+                alignment: start;
+
+                Text {
+                    text: "Settings";
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: Theme.text;
+                    height: 44px;
+                    x: 8px;
+                    vertical-alignment: center;
+                }
+                NavItem {
+                    glyph: "\u{E713}";
+                    label: "General";
+                    selected: State.page == 0;
+                    clicked => { State.page = 0; State.page-changed(0); }
+                }
+                NavItem {
+                    glyph: "\u{E7C8}";
+                    label: "Recording";
+                    selected: State.page == 1;
+                    clicked => { State.page = 1; State.page-changed(1); }
+                }
+                NavItem {
+                    glyph: "\u{E714}";
+                    label: "Video";
+                    selected: State.page == 2;
+                    clicked => { State.page = 2; State.page-changed(2); }
+                }
+                NavItem {
+                    glyph: "\u{E91B}";
+                    label: "GIF";
+                    selected: State.page == 3;
+                    clicked => { State.page = 3; State.page-changed(3); }
+                }
+            }
+            VerticalLayout {
+                alignment: end;
+                padding: 20px;
+                spacing: 2px;
+                Text {
+                    text: "Framelet";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+                Text {
+                    text: "Version " + State.version;
+                    font-size: 12px;
+                    color: Theme.text-tertiary;
+                }
+            }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+            background: Theme.window-bg;
+
+            if State.page == 0: GeneralPage {}
+            if State.page == 1: RecordingPage {}
+            if State.page == 2: VideoPage {}
+            if State.page == 3: GifPage {}
+
+            if State.save-error != "": Rectangle {
+                y: parent.height - self.height - 16px;
+                x: 32px;
+                width: parent.width - 64px;
+                height: 40px;
+                border-radius: 4px;
+                background: Theme.warning-bg;
+                Text {
+                    x: 16px;
+                    width: parent.width - 32px;
+                    text: State.save-error;
+                    font-size: 12px;
+                    color: Theme.warning-text;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+    }
+}

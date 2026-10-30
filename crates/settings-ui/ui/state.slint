@@ -1,0 +1,71 @@
+/*
+ * Author: Jamius Siam
+ * Since: 31/10/2026
+ */
+
+// Mirror of `framelet_core::Settings` plus transient UI state. Combo boxes use indices;
+// Rust maps them to the enums. Components call `changed()` after every user edit.
+export global State {
+    in-out property <int> page: 0;
+    in property <string> version;
+
+    // General
+    in-out property <string> output-dir;
+    in property <bool> output-dir-error;
+    in-out property <bool> ask-save;
+    in-out property <string> file-pattern;
+    in property <string> pattern-preview;
+    in property <bool> pattern-error;
+    in-out property <bool> startup;
+    in-out property <bool> tray;
+    in property <[string]> hotkey-keys;
+    in property <bool> capturing;
+    in property <string> hotkey-error;
+    in-out property <int> theme-index;
+    in-out property <bool> open-folder;
+    in-out property <bool> notifications;
+
+    // Recording
+    in-out property <int> format-index;
+    in-out property <bool> show-cursor;
+    in-out property <int> countdown-index;
+    in-out property <bool> show-elapsed;
+    in-out property <bool> show-controls;
+    in-out property <bool> stop-hotkey;
+    in-out property <bool> dim-while-recording;
+
+    // Video
+    in-out property <int> encoder-index;
+    in-out property <int> fps-index;
+    in-out property <int> quality;
+    in-out property <int> preset-index;
+    in-out property <string> ffmpeg-path;
+    in property <bool> ffmpeg-error;
+    in property <string> caps-summary;
+    in property <bool> caps-detecting;
+    in property <bool> caps-known;
+    in property <bool> caps-nvenc;
+
+    // GIF
+    in-out property <int> gif-fps-index;
+    in-out property <int> gif-scale-index;
+    in-out property <string> gif-width;
+    in property <bool> gif-width-error;
+    in-out property <int> gif-quality-index;
+    in-out property <bool> gif-loop;
+    in-out property <int> gif-dither-index;
+    in-out property <string> gif-max;
+    in property <bool> gif-max-error;
+
+    in property <string> save-error;
+
+    callback changed();
+    callback commit-text();
+    callback startup-toggled(bool);
+    callback browse-output();
+    callback browse-ffmpeg();
+    callback detect-again();
+    callback start-capture();
+    callback cancel-capture();
+    callback page-changed(int);
+}

@@ -1,0 +1,25 @@
+[package]
+name = "framelet-recorder"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+framelet-core.workspace = true
+log.workspace = true
+anyhow.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+windows = { workspace = true, features = ["Win32_UI_HiDpi"] }
+serde_json.workspace = true

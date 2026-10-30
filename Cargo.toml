@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/core",
+    "crates/recorder",
+    "crates/overlay",
+    "crates/settings-ui",
+    "crates/app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Jamius Siam"]
+license = "MIT"
+
+[workspace.dependencies]
+framelet-core = { path = "crates/core" }
+framelet-recorder = { path = "crates/recorder" }
+framelet-overlay = { path = "crates/overlay" }
+windows = "0.62"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = { version = "0.4", features = ["std"] }
+anyhow = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3
