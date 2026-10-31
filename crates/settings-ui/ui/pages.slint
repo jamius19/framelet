@@ -132,10 +132,12 @@ export component RecordingPage inherits Page {
     SectionLabel { text: "Capture"; }
     SettingCard {
         title: "Format";
-        description: "What a finished recording is saved as.";
+        description: State.format-index == 1
+            ? "Encoded on the CPU after recording stops, so WebM takes a little longer to finish."
+            : "What a finished recording is saved as.";
         glyph: "\u{E8B2}";
         FComboBox {
-            model: ["MP4 video", "Animated GIF"];
+            model: ["MP4 (H.264)", "WebM (VP9)", "GIF"];
             current-index <=> State.format-index;
             selected(_) => { State.changed(); }
         }

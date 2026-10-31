@@ -18,7 +18,7 @@ use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 use crate::{SettingsWindow, State};
 
 const THEMES: [cfg::Theme; 3] = [cfg::Theme::System, cfg::Theme::Dark, cfg::Theme::Light];
-const FORMATS: [OutputFormat; 2] = [OutputFormat::Mp4, OutputFormat::Gif];
+const FORMATS: [OutputFormat; 3] = [OutputFormat::Mp4, OutputFormat::Webm, OutputFormat::Gif];
 const ENCODERS: [EncoderPref; 3] = [EncoderPref::Auto, EncoderPref::Nvenc, EncoderPref::Software];
 const PRESETS: [Preset; 3] = [Preset::Fast, Preset::Balanced, Preset::Quality];
 const SCALES: [GifScale; 4] = [GifScale::Original, GifScale::Percent75, GifScale::Percent50, GifScale::CustomWidth];

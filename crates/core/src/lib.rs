@@ -15,5 +15,5 @@ pub mod paths;
 pub mod region;
 pub mod settings;
 
-pub use region::Region;
+pub use region::{ExportScale, Region};
 pub use settings::Settings;

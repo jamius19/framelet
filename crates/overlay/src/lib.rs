@@ -14,16 +14,18 @@ mod win;
 
 pub use frame::RecordingFrame;
 
-use framelet_core::Region;
+use framelet_core::{ExportScale, Region};
 
 /// Shows the fullscreen selection overlay over the whole virtual desktop and runs a nested
 /// modal message loop on the calling (UI) thread until the user finishes.
 /// The selection stays editable (draw / move / resize) until confirmed (Enter, double click inside, Record
 /// button); the returned region is in physical pixels. `None` if canceled (Esc / right click / ✕ button).
+/// The toolbar's scale buttons (0.5× / 0.75× / 1×) pick the [`ExportScale`] returned with the region; it
+/// starts at 1× on every call and is not remembered.
 /// `initial`, clamped to the virtual desktop, opens already selected; if it does not (sufficiently)
 /// intersect the desktop it is ignored.
 /// All overlay windows and GDI resources are destroyed before returning.
-pub fn select_region(initial: Option<Region>) -> Option<Region> {
+pub fn select_region(initial: Option<Region>) -> Option<(Region, ExportScale)> {
     select::run(initial)
 }
 

@@ -52,13 +52,13 @@ fn main() {
     let retry = args.iter().any(|a| a == "--retry");
     let initial = args.iter().position(|a| a == "--initial").and_then(|i| parse_region(args.get(i + 1)?));
     println!("before: {}", gui_objects());
-    let mut region = select_region(initial);
-    println!("select_region -> {region:?} ({})", gui_objects());
-    while retry && region.is_none() {
-        region = select_region(initial);
-        println!("select_region -> {region:?} ({})", gui_objects());
+    let mut selection = select_region(initial);
+    println!("select_region -> {selection:?} ({})", gui_objects());
+    while retry && selection.is_none() {
+        selection = select_region(initial);
+        println!("select_region -> {selection:?} ({})", gui_objects());
     }
-    if let Some(region) = region.filter(|_| !args.iter().any(|a| a == "--no-countdown")) {
+    if let Some((region, _)) = selection.filter(|_| !args.iter().any(|a| a == "--no-countdown")) {
         println!("countdown -> {} ({})", countdown(region, 3), gui_objects());
     }
 }

@@ -19,6 +19,38 @@ pub struct Region {
     pub height: u32,
 }
 
+/// Size the exported MP4 / GIF has relative to the selected region. Chosen per recording, never persisted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExportScale {
+    Half,
+    ThreeQuarters,
+    #[default]
+    Full,
+}
+
+impl ExportScale {
+    /// In the order the selection toolbar shows them.
+    pub const ALL: [ExportScale; 3] = [ExportScale::Half, ExportScale::ThreeQuarters, ExportScale::Full];
+
+    pub fn factor(self) -> f64 {
+        match self {
+            ExportScale::Half => 0.5,
+            ExportScale::ThreeQuarters => 0.75,
+            ExportScale::Full => 1.0,
+        }
+    }
+
+    /// Exported video size for a `width` x `height` region: unchanged at 1x, otherwise scaled and rounded to
+    /// even numbers (both H.264 encoders accept them), at least 2.
+    pub fn output_size(self, width: u32, height: u32) -> (u32, u32) {
+        if self == ExportScale::Full {
+            return (width, height);
+        }
+        let even = |v: u32| ((v as f64 * self.factor() / 2.0).round() as u32 * 2).max(2);
+        (even(width), even(height))
+    }
+}
+
 impl Region {
     pub fn right(&self) -> i32 {
         self.x + self.width as i32

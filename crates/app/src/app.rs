@@ -19,7 +19,7 @@ use std::time::Instant;
 use anyhow::{Result, anyhow};
 use framelet_core::caps::EncoderCaps;
 use framelet_core::hotkey::Hotkey;
-use framelet_core::{Region, Settings, ipc};
+use framelet_core::{ExportScale, Region, Settings, ipc};
 use framelet_overlay::RecordingFrame;
 use framelet_recorder::{FinishedRecording, RecorderEvent, RecordingSession};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
@@ -419,7 +419,7 @@ fn begin_recording(hwnd: HWND) {
         return;
     };
 
-    let Some(region) = selected_region() else {
+    let Some((region, scale)) = selected_region() else {
         return set_state(State::Idle);
     };
     set_state(State::Countdown);
@@ -443,7 +443,7 @@ fn begin_recording(hwnd: HWND) {
     }
 
     let raw = hwnd.0 as isize;
-    match RecordingSession::start(region, &settings, &caps, move |event| post_event(raw, event)) {
+    match RecordingSession::start(region, scale, &settings, &caps, move |event| post_event(raw, event)) {
         Ok(session) => {
             if let Err(e) = region.save_last() {
                 log::warn!("could not save the last region: {e}");
@@ -458,12 +458,12 @@ fn begin_recording(hwnd: HWND) {
 }
 
 /// Debug builds accept `FRAMELET_TEST_REGION=x,y,w,h` to skip the interactive overlay (automated runs).
-fn selected_region() -> Option<Region> {
+fn selected_region() -> Option<(Region, ExportScale)> {
     #[cfg(debug_assertions)]
     if let Ok(v) = std::env::var("FRAMELET_TEST_REGION") {
         let n: Vec<i32> = v.split(',').filter_map(|p| p.trim().parse().ok()).collect();
         if let [x, y, w, h] = n[..] {
-            return Some(Region { x, y, width: w as u32, height: h as u32 });
+            return Some((Region { x, y, width: w as u32, height: h as u32 }, ExportScale::Full));
         }
     }
     framelet_overlay::select_region(Region::load_last())

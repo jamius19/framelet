@@ -5,8 +5,10 @@
 
 //! Verification helper: runs `select_demo` and injects input, but only after the overlay window exists.
 //! Usage: `drive <scenario> <out_dir> [x y]` (scenarios: full, esc, leak, tiny, rclick, esc-countdown, perf, edit,
-//! dblclick, record, cancel-btn, esc-sel, rclick-sel, tiny-sel, initial, initial-off, initial-clamp, perf-move).
-//! `x y` is the screen position of the toolbar button for `record` / `cancel-btn`.
+//! dblclick, record, cancel-btn, esc-sel, rclick-sel, tiny-sel, initial, initial-off, initial-clamp, perf-move,
+//! scale-probe, scale, scale-default).
+//! `x y` is the screen position of the toolbar button for `record` / `cancel-btn`. `scale` takes three positions
+//! (`x y` pairs): the 0.75× segment (hover), the 0.5× segment (click) and the Record button (click).
 
 use std::fs::File;
 use std::path::Path;
@@ -113,6 +115,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let out = Path::new(&args[2]);
     let button = args.get(3).zip(args.get(4)).map(|(x, y)| (x.parse().unwrap(), y.parse().unwrap()));
+    let point = |i: usize| -> (i32, i32) { (args[i].parse().unwrap(), args[i + 1].parse().unwrap()) };
     let demo_args: &[&str] = match args[1].as_str() {
         "leak" => &["--retry", "--no-countdown"],
         "full" | "esc-countdown" => &[],
@@ -218,6 +221,35 @@ fn main() {
             let (x, y) = button.expect("pass the button position as `x y`");
             move_to(x, y);
             shot(out, "hover");
+            mouse(MOUSEEVENTF_LEFTDOWN);
+            mouse(MOUSEEVENTF_LEFTUP);
+        }
+        "scale-probe" => {
+            select_drag((300, 300), (900, 700));
+            move_to(1500, 900);
+            shot(out, "probe");
+            key(VK_ESCAPE);
+        }
+        "scale-default" => {
+            // Enter confirms with the untouched toolbar: the scale must be 1x.
+            select_drag((300, 300), (900, 700));
+            key(VK_RETURN);
+        }
+        "scale" => {
+            select_drag((300, 300), (900, 700));
+            move_to(1500, 900);
+            shot(out, "1_default");
+            let (hover, half, record) = (point(3), point(5), point(7));
+            move_to(hover.0, hover.1);
+            shot(out, "2_hover_75_at_1x");
+            move_to(half.0, half.1);
+            shot(out, "3_hover_half");
+            mouse(MOUSEEVENTF_LEFTDOWN);
+            mouse(MOUSEEVENTF_LEFTUP);
+            println!("overlay still up after clicking 0.5x: {}", exists(SELECT));
+            shot(out, "4_half_selected");
+            move_to(record.0, record.1);
+            shot(out, "5_half_selected_record_hover");
             mouse(MOUSEEVENTF_LEFTDOWN);
             mouse(MOUSEEVENTF_LEFTUP);
         }

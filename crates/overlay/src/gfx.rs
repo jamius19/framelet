@@ -5,6 +5,7 @@
 
 //! Software rendering helpers: DIB sections, rounded "pill" labels with GDI text.
 
+use framelet_core::ExportScale;
 use std::mem::size_of;
 use std::ptr::{null, null_mut};
 use windows::Win32::Foundation::{COLORREF, HWND, POINT, RECT, SIZE};
@@ -294,6 +295,7 @@ pub fn fill_rect(buf: &mut [u32], stride: i32, clip: Rect, rect: Rect, color: u3
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
+    Scale(ExportScale),
     Record,
     Cancel,
 }
@@ -301,8 +303,18 @@ pub enum Button {
 /// Toolbar pill; button rectangles are relative to the pill's top-left corner.
 pub struct Toolbar {
     pub pill: Pill,
+    /// In the order of [`ExportScale::ALL`]; adjacent, so there is no dead zone between segments.
+    pub scales: [Rect; 3],
     pub record: Rect,
     pub cancel: Rect,
+}
+
+fn scale_label(scale: ExportScale) -> &'static str {
+    match scale {
+        ExportScale::Half => "0.5×",
+        ExportScale::ThreeQuarters => "0.75×",
+        ExportScale::Full => "1×",
+    }
 }
 
 /// Premultiplied color from straight RGB and alpha.
@@ -318,23 +330,42 @@ fn segment_distance(x: f32, y: f32, a: (f32, f32), b: (f32, f32)) -> f32 {
     (x - a.0 - t * dx).hypot(y - a.1 - t * dy)
 }
 
-/// Renders the compact toolbar: `dims` | red-dot "Record" button | "✕" button. The hovered button gets a
-/// soft highlight. Text goes through GDI like [`render_pill`]; dot and cross are drawn analytically.
-pub fn render_toolbar(dims: &str, font: &Font, hover: Option<Button>, dpi: u32) -> Option<Toolbar> {
+/// Renders the compact toolbar: `dims` | export scale segments | red-dot "Record" button | "✕" button. The
+/// selected scale gets a filled segment, the hovered button a soft highlight. Text goes through GDI like
+/// [`render_pill`]; dot and cross are drawn analytically.
+pub fn render_toolbar(
+    dims: &str,
+    font: &Font,
+    selected: ExportScale,
+    hover: Option<Button>,
+    dpi: u32,
+) -> Option<Toolbar> {
     const RECORD: &str = "Record";
     let s = |v: f32| dp(v, dpi);
     let k = dpi as f32 / 96.0;
     let (dims_ext, record_ext) = (text_size(dims, font), text_size(RECORD, font));
+    let labels = ExportScale::ALL.map(scale_label);
+    let label_exts = labels.map(|l| text_size(l, font));
 
     let h = s(34.0);
     let (btn_h, dot) = (s(26.0), s(8.0));
     let btn_y = (h - btn_h) / 2;
     let divider_x = s(14.0) + dims_ext.cx + s(12.0);
-    let rec_x = divider_x + s(1.0).max(1) + s(6.0);
-    let rec_text_x = rec_x + s(10.0) + dot + s(6.0);
-    let rec_w = rec_text_x - rec_x + record_ext.cx + s(12.0);
+    // Segmented control: a track holding segments sized to their labels, inset a little from its edge.
+    let inset = s(2.0);
+    let seg_ws = label_exts.map(|e| (e.cx + 2 * s(5.0)).max(s(22.0)));
+    let track_x = divider_x + s(1.0).max(1) + s(6.0);
+    let track = Rect::new(track_x, btn_y, track_x + seg_ws.iter().sum::<i32>() + 2 * inset, btn_y + btn_h);
+    let scales = [0, 1, 2].map(|i| {
+        let left = track.left + inset + seg_ws[..i].iter().sum::<i32>();
+        Rect::new(left, track.top + inset, left + seg_ws[i], track.bottom - inset)
+    });
+    let divider2_x = track.right + s(6.0);
+    let rec_x = divider2_x + s(1.0).max(1) + s(6.0);
+    let rec_text_x = rec_x + s(8.0) + dot + s(5.0);
+    let rec_w = rec_text_x - rec_x + record_ext.cx + s(9.0);
     let can_x = rec_x + rec_w + s(2.0);
-    let can_w = s(26.0);
+    let can_w = s(24.0);
     let w = can_x + can_w + s(5.0);
     let record = Rect::new(rec_x, btn_y, rec_x + rec_w, btn_y + btn_h);
     let cancel = Rect::new(can_x, btn_y, can_x + can_w, btn_y + btn_h);
@@ -344,24 +375,44 @@ pub fn render_toolbar(dims: &str, font: &Font, hover: Option<Button>, dpi: u32) 
         SelectObject(dib.dc, font.0.into());
         SetBkMode(dib.dc, TRANSPARENT);
         SetTextColor(dib.dc, COLORREF(0x00FF_FFFF));
-        for (text, x, ext) in [(dims, s(14.0), dims_ext), (RECORD, rec_text_x, record_ext)] {
+        let draw = |text: &str, x: i32, ext: SIZE| {
             let wide: Vec<u16> = text.encode_utf16().collect();
             let _ = TextOutW(dib.dc, x, (h - ext.cy) / 2, &wide);
+        };
+        draw(dims, s(14.0), dims_ext);
+        draw(RECORD, rec_text_x, record_ext);
+        for ((text, ext), seg) in labels.into_iter().zip(label_exts).zip(scales) {
+            draw(text, seg.left + (seg.right - seg.left - ext.cx) / 2, ext);
         }
         let _ = GdiFlush();
     }
 
     let radius = s(10.0).min(h / 2) as f32;
     let btn_radius = s(8.0) as f32;
-    let divider = Rect::new(divider_x, (h - s(16.0)) / 2, divider_x + s(1.0).max(1), (h + s(16.0)) / 2);
-    let dot_c = ((rec_x + s(10.0)) as f32 + dot as f32 / 2.0, h as f32 / 2.0);
+    let seg_radius = (btn_radius - inset as f32).max(1.0);
+    let (div_top, div_bottom) = ((h - s(16.0)) / 2, (h + s(16.0)) / 2);
+    let dividers = [divider_x, divider2_x].map(|x| Rect::new(x, div_top, x + s(1.0).max(1), div_bottom));
+    let dot_c = ((rec_x + s(8.0)) as f32 + dot as f32 / 2.0, h as f32 / 2.0);
     let cross_c = ((can_x + can_w / 2) as f32, h as f32 / 2.0);
     let (arm, thickness) = (4.0 * k, 1.5 * k);
     let highlight = premul(0xFFFFFF, 0.16);
+    let track_fill = premul(0xFFFFFF, 0.07);
     let hovered = match hover {
         Some(Button::Record) => Some(record),
         Some(Button::Cancel) => Some(cancel),
-        None => None,
+        Some(Button::Scale(_)) | None => None,
+    };
+    // Unselected, unhovered segment labels are dimmed.
+    let dimmed: Vec<Rect> = ExportScale::ALL
+        .iter()
+        .zip(scales)
+        .filter(|&(&sc, _)| sc != selected && hover != Some(Button::Scale(sc)))
+        .map(|(_, r)| r)
+        .collect();
+    // Anti-aliased coverage of a rounded rectangle at (`fx`, `fy`).
+    let rect_cov = |fx: f32, fy: f32, r: Rect, radius: f32| {
+        let d = rounded_rect_sdf(fx - r.left as f32, fy - r.top as f32, r.width() as f32, r.height() as f32, radius);
+        (0.5 - d).clamp(0.0, 1.0)
     };
 
     let coverage = dib.pixels();
@@ -369,15 +420,27 @@ pub fn render_toolbar(dims: &str, font: &Font, hover: Option<Button>, dpi: u32) 
     for y in 0..h {
         for x in 0..w {
             let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
-            let text = ((coverage[(y * w + x) as usize] >> 8) & 0xFF) as f32 / 255.0;
+            let mut text = ((coverage[(y * w + x) as usize] >> 8) & 0xFF) as f32 / 255.0;
+            if dimmed.iter().any(|r| r.contains(POINT { x, y })) {
+                text *= 0.6;
+            }
             let mut px = pill_pixel(rounded_rect_sdf(fx, fy, w as f32, h as f32, radius), text);
 
-            if let Some(b) = hovered {
-                let (bw, bh) = (b.width() as f32, b.height() as f32);
-                let d = rounded_rect_sdf(fx - b.left as f32, fy - b.top as f32, bw, bh, btn_radius);
-                px = over(scale(highlight, (0.5 - d).clamp(0.0, 1.0)), px);
+            px = over(scale(track_fill, rect_cov(fx, fy, track, btn_radius)), px);
+            for (&sc, &seg) in ExportScale::ALL.iter().zip(&scales) {
+                let hovered_seg = hover == Some(Button::Scale(sc));
+                let alpha = match (sc == selected, hovered_seg) {
+                    (true, true) => 0.34,
+                    (true, false) => 0.28,
+                    (false, true) => 0.16,
+                    (false, false) => continue,
+                };
+                px = over(scale(premul(0xFFFFFF, alpha), rect_cov(fx, fy, seg, seg_radius)), px);
             }
-            if divider.contains(POINT { x, y }) {
+            if let Some(b) = hovered {
+                px = over(scale(highlight, rect_cov(fx, fy, b, btn_radius)), px);
+            }
+            if dividers.iter().any(|d| d.contains(POINT { x, y })) {
                 px = over(premul(0xFFFFFF, 0.18), px);
             }
             let dot_cov = (0.5 - ((fx - dot_c.0).hypot(fy - dot_c.1) - dot as f32 / 2.0)).clamp(0.0, 1.0);
@@ -394,7 +457,7 @@ pub fn render_toolbar(dims: &str, font: &Font, hover: Option<Button>, dpi: u32) 
             pixels.push(px);
         }
     }
-    Some(Toolbar { pill: Pill { width: w, height: h, pixels }, record, cancel })
+    Some(Toolbar { pill: Pill { width: w, height: h, pixels }, scales, record, cancel })
 }
 
 /// Scales a premultiplied color by `f` (0..=1).

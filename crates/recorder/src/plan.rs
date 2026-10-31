@@ -27,7 +27,7 @@ const NVENC_MIN_HEIGHT: u32 = 49;
 
 /// FFmpeg 7.1 ignores `-color_primaries` / `-color_trc` for frames that carry no tags (gdigrab, and
 /// anything after a software conversion), so they are stamped on the frames instead.
-const TAG_FRAMES: &str = "setparams=color_primaries=bt709:color_trc=iec61966-2-1";
+pub const TAG_FRAMES: &str = "setparams=color_primaries=bt709:color_trc=iec61966-2-1";
 
 #[derive(Debug, Clone, Copy)]
 pub enum Grab {
@@ -80,21 +80,38 @@ pub struct CaptureSpec {
     /// 0..=100
     pub quality: u32,
     pub preset: Preset,
-    /// GIF intermediates use near-lossless quality and ignore `quality`/`preset`.
+    /// GIF, WebM and scaled MP4 intermediates use near-lossless quality and ignore `quality`/`preset`.
     pub intermediate: bool,
     pub max_secs: Option<u32>,
 }
 
 impl CaptureSpec {
-    fn nvenc_cq(&self) -> u32 {
+    pub fn nvenc_cq(&self) -> u32 {
         if self.intermediate { 15 } else { 35 - (self.quality * 18 + 50) / 100 }
     }
 
-    fn x264_crf(&self) -> u32 {
+    pub fn x264_crf(&self) -> u32 {
         if self.intermediate { 14 } else { 30 - (self.quality * 14 + 50) / 100 }
     }
 
-    fn nvenc_preset(&self) -> &'static str {
+    /// libvpx-vp9 CRF (0..=63) for the WebM post-processing encode: 44 at quality 0, 24 at the default 75,
+    /// 18 at 100. Measured on sharp text against the near-lossless intermediate, VMAF is at least that of the
+    /// NVENC MP4 at the same quality setting, in a much smaller file.
+    pub fn vp9_crf(&self) -> u32 {
+        44 - (self.quality * 26 + 50) / 100
+    }
+
+    /// libvpx-vp9 `-cpu-used` (lower is slower and compresses better). FFmpeg 7.1's libvpx is both slower and
+    /// larger at 5 and 6 than at 4 (measured), so Fast stops at 4.
+    pub fn vp9_cpu_used(&self) -> &'static str {
+        match self.preset {
+            Preset::Fast => "4",
+            Preset::Balanced => "3",
+            Preset::Quality => "1",
+        }
+    }
+
+    pub fn nvenc_preset(&self) -> &'static str {
         match (self.intermediate, self.preset) {
             (true, _) | (_, Preset::Balanced) => "p4",
             (_, Preset::Fast) => "p2",
@@ -109,6 +126,16 @@ impl CaptureSpec {
             (_, Preset::Balanced) => "superfast",
             (_, Preset::Quality) => "veryfast",
         }
+    }
+}
+
+/// Encoder for scaling a capture made with `captured` down to `size`: the same family, unless NVENC cannot
+/// take a frame that small.
+pub fn scaled_codec(captured: Codec, size: (u32, u32)) -> Codec {
+    if captured == Codec::Nvenc && size.0 >= NVENC_MIN_WIDTH && size.1 >= NVENC_MIN_HEIGHT {
+        Codec::Nvenc
+    } else {
+        Codec::X264
     }
 }
 

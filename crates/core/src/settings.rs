@@ -102,6 +102,7 @@ impl Default for Recording {
 #[serde(rename_all = "snake_case")]
 pub enum OutputFormat {
     Mp4,
+    Webm,
     Gif,
 }
 
@@ -109,6 +110,7 @@ impl OutputFormat {
     pub fn extension(self) -> &'static str {
         match self {
             OutputFormat::Mp4 => "mp4",
+            OutputFormat::Webm => "webm",
             OutputFormat::Gif => "gif",
         }
     }

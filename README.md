@@ -1,6 +1,6 @@
 # Framelet
 
-A small Windows 11 tray utility for recording a region of the screen as MP4 or GIF.
+A small Windows 11 tray utility for recording a region of the screen as MP4, WebM or GIF.
 Rust + Win32, with FFmpeg doing the capture and encoding: D3D11 Desktop Duplication (`ddagrab`)
 feeds NVIDIA NVENC directly on the GPU, with automatic fallbacks to `gdigrab` and `libx264`.
 
@@ -17,7 +17,8 @@ Right-click the tray icon for Settings, Open Recordings Folder and Exit.
 ## Requirements
 
 - Windows 11 (Windows 10 2004+ likely works but is untested).
-- `ffmpeg.exe` 6.1+ with `ddagrab`, `h264_nvenc` and `libx264` (e.g. the gyan.dev "full" build).
+- `ffmpeg.exe` 6.1+ with `ddagrab`, `h264_nvenc` and `libx264` (e.g. the gyan.dev "full" build); `libvpx-vp9`
+  is needed for WebM.
   Framelet looks for it in Settings → Video → FFmpeg location, then next to `framelet.exe`, then in
   `ffmpeg\bin\` next to it, then on `PATH`.
 - An NVIDIA GPU is optional; without one, recordings use `libx264`.
@@ -37,7 +38,7 @@ and icons). Crate layout and design decisions are in [ARCHITECTURE.md](ARCHITECT
 Handy debug tools:
 
 - `cargo run -p framelet-recorder --example record_demo -- 100 100 641 361 3 mp4` records a region
-  without the UI.
+  without the UI (`mp4`, `webm` or `gif`).
 - `cargo run -p framelet-overlay --example select_demo` runs the selection overlay and countdown alone.
 - Debug builds of `framelet.exe` accept `--demo-controller` and the `FRAMELET_TEST_REGION=x,y,w,h`
   environment variable (skips the overlay).

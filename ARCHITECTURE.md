@@ -25,7 +25,7 @@ posts registered window messages to the tray's hidden window (`framelet_core::ip
 crates/core       framelet-core      settings model + validation + atomic save, paths, file naming,
                                      hotkey parse/format, IPC identifiers, EncoderCaps model, file logger
 crates/recorder   framelet-recorder  ffmpeg discovery, capability detection, capture planning (DXGI output
-                                     mapping), ffmpeg process lifecycle, remux/GIF post-processing,
+                                     mapping), ffmpeg process lifecycle, remux/scale/WebM/GIF post-processing,
                                      save/move, crash recovery
 crates/overlay    framelet-overlay   selection overlay + countdown (layered Win32 windows, nested modal loops),
                                      recording frame (non-modal: red border + optional dim, solid click-through windows)
@@ -61,8 +61,20 @@ Dependency direction: `app → {recorder, overlay, core}`, `settings-ui → {rec
    is killed). FFmpeg stderr goes to a log file next to it (no pipe-draining threads). FFmpeg is placed in
    a Job Object with KILL_ON_JOB_CLOSE so it never outlives the app.
 4. Stop = write `q` to ffmpeg stdin (graceful), kill after timeout. Cancel = kill + delete.
-5. Post-process: MP4 → stream-copy remux with `+faststart`; GIF → `palettegen`/`paletteuse` two-stage
-   filter from the temp video (high-quality NVENC intermediate).
+5. Post-process, per the export scale picked on the selection toolbar (0.5× / 0.75× / 1×, default 1×, never
+   persisted; output sizes are rounded to even numbers):
+   - MP4 at 1× → stream-copy remux with `+faststart`.
+   - MP4 below 1× → the capture is a high-quality intermediate (like GIF), then re-encoded with
+     `scale=W:H:flags=lanczos` (same encoder family as the capture: NVENC, or libx264 `medium` when software
+     or when the scaled size is below the NVENC minimum), user's quality mapping, `+faststart`. Live capture
+     stays full-resolution on the GPU.
+   - WebM → the capture is a high-quality intermediate (like GIF), then encoded on the CPU with `libvpx-vp9`
+     (`-crf` from the quality setting: 44 at 0, 24 at 75, 18 at 100; `-deadline good`, `-cpu-used` 4 / 3 / 1 for
+     Fast / Balanced / High Quality, `-row-mt 1`, tile columns from the width, no audio). The export scale applies
+     as `scale=W:H:flags=lanczos`; at 1× the size is kept, odd or not. The colour matrix of the capture
+     encoder is preserved in the tags (`bt470bg` after NVENC, `bt709` after x264), like the scaled MP4.
+   - GIF → `palettegen`/`paletteuse` two-stage filter from the temp video (high-quality intermediate); the
+     export scale multiplies the configured GIF scale (never above the region size).
 6. Save: auto to output dir with pattern name (never overwrites), or Save As dialog. Dialog canceled →
    saved to the output dir anyway and the user is told (no silent loss).
 7. Crash recovery: on startup, leftover temp recordings are remuxed into the output dir as "(recovered)".

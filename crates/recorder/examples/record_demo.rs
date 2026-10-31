@@ -5,8 +5,8 @@
 
 //! Manual verification tool.
 //!
-//! `record_demo X Y W H SECS mp4|gif [--settings JSON] [--ffmpeg PATH] [--cancel] [--name NAME]`
-//! `             [--force-caps] [--no-dda] [--no-nvenc] [--cancel-processing]`
+//! `record_demo X Y W H SECS mp4|webm|gif [--settings JSON] [--ffmpeg PATH] [--cancel] [--name NAME]`
+//! `             [--scale 0.5|0.75|1] [--force-caps] [--no-dda] [--no-nvenc] [--cancel-processing]`
 //! `record_demo recover [--settings JSON]` runs crash recovery.
 //! Records the region, stops (or cancels), prints events and saves the result into `OUT_DIR`.
 
@@ -16,13 +16,13 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use framelet_core::settings::OutputFormat;
-use framelet_core::{Region, Settings};
+use framelet_core::{ExportScale, Region, Settings};
 use framelet_recorder::{RecorderEvent, RecordingSession, load_or_detect_caps, recover_orphans, save_output};
 use windows::Win32::UI::HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext};
 
 const OUT_DIR: &str = concat!(
     r"C:\Users\jamius19\AppData\Local\Temp\claude\C--Users-jamius19-projects-framelet",
-    r"\87003bd5-760b-49d3-8a9d-9f91dad141f9\scratchpad\recorder"
+    r"\fde2937d-38e2-4928-a780-4a624cdf4b09\scratchpad\recorder"
 );
 
 fn main() -> anyhow::Result<()> {
@@ -42,7 +42,10 @@ fn main() -> anyhow::Result<()> {
         println!("recovered: {:#?}", recover_orphans(&settings, &caps));
         return Ok(());
     }
-    anyhow::ensure!(args.len() >= 6, "usage: record_demo X Y W H SECS mp4|gif [flags] | recover [--settings JSON]");
+    anyhow::ensure!(
+        args.len() >= 6,
+        "usage: record_demo X Y W H SECS mp4|webm|gif [flags] | recover [--settings JSON]"
+    );
     let n = |i: usize| args[i].parse::<i32>();
     let region = Region { x: n(0)?, y: n(1)?, width: n(2)? as u32, height: n(3)? as u32 };
     let secs: f64 = args[4].parse()?;
@@ -51,7 +54,18 @@ fn main() -> anyhow::Result<()> {
         Some(json) => serde_json::from_str(&json)?,
         None => Settings::default(),
     };
-    settings.recording.format = if args[5] == "gif" { OutputFormat::Gif } else { OutputFormat::Mp4 };
+    settings.recording.format = match args[5].as_str() {
+        "gif" => OutputFormat::Gif,
+        "webm" => OutputFormat::Webm,
+        _ => OutputFormat::Mp4,
+    };
+
+    let scale = match value("--scale").as_deref() {
+        None | Some("1") => ExportScale::Full,
+        Some("0.75") => ExportScale::ThreeQuarters,
+        Some("0.5") => ExportScale::Half,
+        Some(other) => anyhow::bail!("--scale must be 0.5, 0.75 or 1, got {other}"),
+    };
 
     let t = Instant::now();
     let mut caps = load_or_detect_caps(&settings, flag("--force-caps").is_some());
@@ -64,7 +78,7 @@ fn main() -> anyhow::Result<()> {
 
     let (tx, rx) = mpsc::channel();
     let started = Instant::now();
-    let session = RecordingSession::start(region, &settings, &caps, move |event| {
+    let session = RecordingSession::start(region, scale, &settings, &caps, move |event| {
         let _ = tx.send((started.elapsed(), event));
     });
     let session = match session {
@@ -92,6 +106,8 @@ fn main() -> anyhow::Result<()> {
         match event {
             RecorderEvent::Processing => {
                 if flag("--cancel-processing").is_some() {
+                    // Let the post-processing ffmpeg get going, so the kill hits a running encode.
+                    std::thread::sleep(Duration::from_secs(2));
                     session.cancel();
                 }
             }

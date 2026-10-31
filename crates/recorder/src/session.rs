@@ -20,7 +20,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, bail};
 use framelet_core::caps::EncoderCaps;
 use framelet_core::settings::{Gif, OutputFormat};
-use framelet_core::{Region, Settings, paths};
+use framelet_core::{ExportScale, Region, Settings, paths};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
 use windows::Win32::System::Threading::{CreateEventW, INFINITE, ResetEvent, SetEvent, WaitForMultipleObjects};
 
@@ -80,6 +80,7 @@ pub struct RecordingSession {
 impl RecordingSession {
     pub fn start(
         region: Region,
+        scale: ExportScale,
         settings: &Settings,
         caps: &EncoderCaps,
         on_event: impl Fn(RecorderEvent) + Send + 'static,
@@ -96,13 +97,15 @@ impl RecordingSession {
 
         let format = settings.recording.format;
         let gif = format == OutputFormat::Gif;
+        let webm = format == OutputFormat::Webm;
         let spec = CaptureSpec {
             region,
             fps: if gif { settings.gif.fps } else { settings.video.fps },
             cursor: settings.recording.show_cursor,
             quality: settings.video.quality,
             preset: settings.video.preset,
-            intermediate: gif,
+            // WebM and a scaled MP4 are re-encoded from a near-lossless intermediate, like a GIF.
+            intermediate: gif || webm || scale != ExportScale::Full,
             max_secs: Some(settings.gif.max_duration_secs).filter(|&s| gif && s > 0),
         };
         let chain = plan::plan_chain(&region, settings, caps);
@@ -118,6 +121,7 @@ impl RecordingSession {
             chain: chain.plans,
             warning: chain.warning,
             spec,
+            scale,
             gif: settings.gif.clone(),
             format,
             mkv: dir.join(format!("{stem}.mkv")),
@@ -181,6 +185,7 @@ struct Worker {
     chain: Vec<Plan>,
     warning: Option<String>,
     spec: CaptureSpec,
+    scale: ExportScale,
     gif: Gif,
     format: OutputFormat,
     mkv: PathBuf,
@@ -304,10 +309,28 @@ impl Worker {
     fn finish(&self, attempt: usize) {
         self.emit(RecorderEvent::Processing);
         let result = match self.format {
-            OutputFormat::Mp4 => self.run_post(post::remux_args(&self.mkv, &self.final_path), &self.final_path, true),
+            OutputFormat::Mp4 if self.scale == ExportScale::Full => {
+                self.run_post(post::remux_args(&self.mkv, &self.final_path), &self.final_path, true)
+            }
+            OutputFormat::Mp4 => {
+                let size = self.scale.output_size(self.spec.region.width, self.spec.region.height);
+                let captured = self.chain[attempt].codec;
+                let codec = plan::scaled_codec(captured, size);
+                let spec = CaptureSpec { intermediate: false, ..self.spec.clone() };
+                let args = post::scaled_mp4_args(&self.mkv, &self.final_path, captured, codec, size, &spec);
+                self.run_post(args, &self.final_path, true)
+            }
+            OutputFormat::Webm => {
+                let captured = self.chain[attempt].codec;
+                let frame = self.chain[attempt].frame_size(&self.spec.region);
+                let spec = CaptureSpec { intermediate: false, ..self.spec.clone() };
+                let args = post::webm_args(&self.mkv, &self.final_path, captured, frame, self.scale, &spec);
+                self.run_post(args, &self.final_path, true)
+            }
             OutputFormat::Gif => {
                 let (width, _) = self.chain[attempt].frame_size(&self.spec.region);
-                self.run_post(post::gif_args(&self.mkv, &self.final_path, width, &self.gif), &self.final_path, true)
+                let args = post::gif_args(&self.mkv, &self.final_path, width, &self.gif, self.scale);
+                self.run_post(args, &self.final_path, true)
             }
         };
         match result {
@@ -326,7 +349,7 @@ impl Worker {
                 }));
             }
             Post::Failed(message) => {
-                let partial = self.salvage(self.format == OutputFormat::Gif);
+                let partial = self.salvage(self.format != OutputFormat::Mp4);
                 self.failed(message, partial);
             }
         }

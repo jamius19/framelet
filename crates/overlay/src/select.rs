@@ -10,7 +10,7 @@
 
 use crate::gfx::{Button, Dib, Font, Pill, Rect, blend_pill, dp, fill_rect, render_pill, render_toolbar};
 use crate::win::{self, EscGuard};
-use framelet_core::Region;
+use framelet_core::{ExportScale, Region};
 use std::cell::{Cell, RefCell};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::Graphics::Gdi::{HMONITOR, MONITOR_DEFAULTTONEAREST, MonitorFromPoint};
@@ -31,7 +31,7 @@ const HINT: &str = "Drag to select an area · Esc to cancel";
 
 struct Select {
     done: Cell<bool>,
-    result: Cell<Option<Region>>,
+    result: Cell<Option<(Region, ExportScale)>>,
     inner: RefCell<Inner>,
 }
 
@@ -90,6 +90,7 @@ enum Drag {
 }
 
 enum Action {
+    SetScale(ExportScale),
     Confirm,
     Cancel,
 }
@@ -97,6 +98,7 @@ enum Action {
 /// Where the toolbar was painted, in client coordinates (button rectangles span the full pill height).
 struct Placed {
     bounds: Rect,
+    scales: [Rect; 3],
     record: Rect,
     cancel: Rect,
 }
@@ -123,13 +125,15 @@ struct Inner {
     sel: Option<Rect>,
     drag: Option<Drag>,
     hover: Option<Button>,
+    /// Export size chosen on the toolbar; starts at 1x on every open.
+    scale: ExportScale,
     /// Set by a double click inside the selection; confirms when that click is released.
     confirm_on_up: bool,
     toolbar: Option<Placed>,
     drawn: Drawn,
 }
 
-pub fn run(initial: Option<Region>) -> Option<Region> {
+pub fn run(initial: Option<Region>) -> Option<(Region, ExportScale)> {
     let (x, y, w, h) = unsafe {
         (
             GetSystemMetrics(SM_XVIRTUALSCREEN),
@@ -161,6 +165,7 @@ pub fn run(initial: Option<Region>) -> Option<Region> {
         sel: initial.and_then(|r| initial_rect(r, origin, w, h)),
         drag: None,
         hover: None,
+        scale: ExportScale::Full,
         confirm_on_up: false,
         toolbar: None,
         drawn: Drawn { sel: Some(Rect::new(0, 0, w, h)), ..Default::default() },
@@ -226,8 +231,12 @@ impl Inner {
         let (dpi, m) = (self.dpi, self.metrics);
 
         let toolbar = self.sel.and_then(|s| {
-            let text = format!("{} × {}", s.width(), s.height());
-            let bar = render_toolbar(&text, &self.label_font, self.hover, dpi)?;
+            let mut text = format!("{} × {}", s.width(), s.height());
+            if self.scale != ExportScale::Full {
+                let (w, h) = self.scale.output_size(s.width() as u32, s.height() as u32);
+                text = format!("{text} → {w} × {h}");
+            }
+            let bar = render_toolbar(&text, &self.label_font, self.scale, self.hover, dpi)?;
             let (x, y) = label_pos(s, &bar.pill, self.selection_monitor_rect(s), m.gap);
             Some((x, y, bar))
         });
@@ -239,7 +248,7 @@ impl Inner {
         self.toolbar = toolbar.as_ref().map(|(x, y, bar)| {
             let bounds = Rect::new(*x, *y, x + bar.pill.width, y + bar.pill.height);
             let span = |r: Rect| Rect::new(x + r.left, bounds.top, x + r.right, bounds.bottom);
-            Placed { bounds, record: span(bar.record), cancel: span(bar.cancel) }
+            Placed { bounds, scales: bar.scales.map(span), record: span(bar.record), cancel: span(bar.cancel) }
         });
         let drawn = Drawn {
             sel: self.sel.map(|s| s.inflate(m.ring + m.handle / 2 + 2)),
@@ -284,6 +293,9 @@ impl Inner {
 
     fn hit(&self, pt: POINT) -> Hit {
         if let Some(t) = &self.toolbar {
+            if let Some(i) = t.scales.iter().position(|r| r.contains(pt)) {
+                return Hit::Button(Button::Scale(ExportScale::ALL[i]));
+            }
             if t.record.contains(pt) {
                 return Hit::Button(Button::Record);
             }
@@ -406,12 +418,27 @@ impl Inner {
         self.drag = Some(drag);
     }
 
+    /// Switches the export scale; the toolbar's width follows its size label, so the hover is re-evaluated.
+    fn set_scale(&mut self, scale: ExportScale, pt: POINT) {
+        if scale == self.scale {
+            return;
+        }
+        self.scale = scale;
+        self.render(true);
+        let hover = self.hover_at(pt);
+        if hover != self.hover {
+            self.hover = hover;
+            self.render(true);
+        }
+    }
+
     /// Finishes a drag; returns what a click on a toolbar button or a double click asks for.
     fn on_button_up(&mut self, pt: POINT) -> Option<Action> {
         let drag = self.drag.take()?;
         let _ = unsafe { ReleaseCapture() };
         match drag {
             Drag::Press(b) => (self.hover_at(pt) == Some(b)).then_some(match b {
+                Button::Scale(scale) => Action::SetScale(scale),
                 Button::Record => Action::Confirm,
                 Button::Cancel => Action::Cancel,
             }),
@@ -570,11 +597,11 @@ fn client_point(lparam: LPARAM) -> POINT {
     POINT { x: lparam.0 as i16 as i32, y: (lparam.0 >> 16) as i16 as i32 }
 }
 
-/// Finishes with the current selection, if it is valid.
+/// Finishes with the current selection and export scale, if the selection is valid.
 fn confirm(state: &Select) {
-    let region = state.inner.try_borrow().ok().and_then(|s| s.region());
-    if region.is_some() {
-        state.result.set(region);
+    let result = state.inner.try_borrow().ok().and_then(|s| Some((s.region()?, s.scale)));
+    if result.is_some() {
+        state.result.set(result);
         state.done.set(true);
     }
 }
@@ -608,7 +635,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             }
         }
         WM_LBUTTONUP => {
-            match inner().and_then(|mut s| s.on_button_up(client_point(lparam))) {
+            let pt = client_point(lparam);
+            match inner().and_then(|mut s| s.on_button_up(pt)) {
+                Some(Action::SetScale(scale)) => {
+                    if let Some(mut s) = inner() {
+                        s.set_scale(scale, pt);
+                    }
+                }
                 Some(Action::Confirm) => confirm(state),
                 Some(Action::Cancel) => state.done.set(true),
                 None => {}

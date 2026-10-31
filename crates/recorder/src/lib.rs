@@ -4,7 +4,7 @@
  */
 
 //! FFmpeg capture pipeline: discovery, capability detection, capture planning, process lifecycle,
-//! remux / GIF post-processing, save and crash recovery. See ARCHITECTURE.md.
+//! remux / scale / WebM / GIF post-processing, save and crash recovery. See ARCHITECTURE.md.
 
 mod detect;
 mod display;
@@ -26,7 +26,8 @@ pub use session::RecordingSession;
 /// Events delivered from the recording worker thread to the `on_event` callback.
 #[derive(Debug)]
 pub enum RecorderEvent {
-    /// Capture ended (stop, max duration reached); post-processing (remux / GIF) is running.
+    /// Capture ended (stop, max duration reached); post-processing (remux / scaled re-encode / WebM / GIF) is
+    /// running.
     Processing,
     /// The final file is ready inside the temp dir. The receiver moves it with [`save_output`].
     Finished(FinishedRecording),

@@ -74,13 +74,13 @@ pub fn recover_orphans(settings: &Settings, caps: &EncoderCaps) -> Vec<PathBuf> 
                 }
             }
             // A finished file whose capture was already deleted was never saved by the app.
-            "mp4" | "gif" if !path.with_extension("mkv").exists() => {
+            "mp4" | "webm" | "gif" if !path.with_extension("mkv").exists() => {
                 if let Some(out) = save_recovered(path, settings, &ext_of(path)) {
                     saved.push(out);
                 }
             }
             // Stale logs, probe output, partial conversions of a still present capture.
-            "log" | "txt" | "mp4" | "gif" => {
+            "log" | "txt" | "mp4" | "webm" | "gif" => {
                 let _ = fs::remove_file(path);
             }
             _ => {}

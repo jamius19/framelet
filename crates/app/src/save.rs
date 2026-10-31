@@ -86,6 +86,7 @@ fn ask_path(hwnd: HWND, dir: &Path, stem: &str, format: OutputFormat) -> windows
         let dialog: IFileSaveDialog = CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER)?;
         let (label, spec) = match format {
             OutputFormat::Mp4 => (w!("MP4 video"), w!("*.mp4")),
+            OutputFormat::Webm => (w!("WebM video"), w!("*.webm")),
             OutputFormat::Gif => (w!("GIF image"), w!("*.gif")),
         };
         dialog.SetFileTypes(&[COMDLG_FILTERSPEC { pszName: label, pszSpec: spec }])?;
